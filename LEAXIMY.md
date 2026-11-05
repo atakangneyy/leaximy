@@ -1,0 +1,79 @@
+# Leaximy
+
+Leaximy, [Spotifast](https://github.com/crmne/spotifast) 0.11.2 üzerine kurulmuş,
+lacivert–beyaz temalı, kehribar vurgulu kişisel bir Spotify istemcisidir.
+Spotifast MIT lisanslıdır; `LICENSE` dosyası olduğu gibi korunmalıdır.
+
+## Spotifast'tan farkları
+
+| Konu | Spotifast | Leaximy |
+| --- | --- | --- |
+| Görünen ad, pencere başlığı, Spotify Connect cihaz adı | Spotifast | Leaximy |
+| Komut | `spotifast` (+ `fastpotify`) | `leaximy` |
+| Koyu tema | koyu gri + yeşil | lacivert + beyaz yazı + kehribar vurgu |
+| Açık tema | beyaz + yeşil | beyaz + lacivert yazı + lacivert vurgu |
+| İkon | yeşil disk, siyah üçgen | lacivert disk, beyaz üçgen, kehribar kenar |
+| Mini oynatıcı (yerleşik Winamp teması) | koyu gri + yeşil, "SPOTIFAST" | lacivert + kehribar, "LEAXIMY" |
+| Windows kurulumu | Spotifast kurulumu | `Leaximy-<sürüm>-Setup.exe`, Türkçe sihirbaz, ayrı uygulama kimliği |
+| Ayar, önbellek, oturum (anahtar zinciri), D-Bus/MPRIS adları | `spotifast` | `leaximy` (Spotifast ile karışmaz, ikisi yan yana çalışır) |
+| Otomatik güncelleme | GitHub'dan Spotifast sürümleri | kapalı (yoksa uygulamanın üzerine Spotifast yazılırdı) |
+
+Renkler `src/theme.rs` içindeki `Palette::dark()` ve `Palette::light()`
+fonksiyonlarında, ikon `src/util.rs` içindeki `mark_rgba` fonksiyonunda,
+mini oynatıcı teması `assets/skins/spotifast.wsz` dosyasında (üreticisi
+`examples/default_skin.rs`).
+
+## Windows kurulum dosyası (setup.exe)
+
+Elle derlemene gerek yok. Bu depo GitHub'a gönderildiğinde
+`.github/workflows/leaximy-windows.yml` her `main` güncellemesinde Windows
+sürümünü derler ve **Releases** sayfasına iki dosya koyar:
+
+- `Leaximy-<sürüm>-Setup.exe`: çift tıkla, "İleri"ye bas. Yönetici izni
+  istemez, Başlat menüsüne ve masaüstüne kısayol koyar, Denetim Masası'ndan
+  kaldırılabilir.
+- `Leaximy-<sürüm>-portable.exe`: kurulumsuz, doğrudan çalışır.
+
+Arkadaşların için Releases sayfasının bağlantısını paylaşman yeterli.
+Kurulum imzasız olduğu için Windows SmartScreen ilk seferde "bilinmeyen
+yayımcı" diyebilir: **Ek bilgi → Yine de çalıştır**.
+
+Derleme yaklaşık 20–30 dakika sürer; ilerlemesi depodaki **Actions**
+sekmesinde görünür. Elle başlatmak için: Actions → Leaximy Windows
+installer → Run workflow.
+
+## Derleme
+
+Gerekenler: [rustup](https://rustup.rs) (doğru Rust sürümünü
+`rust-toolchain.toml` dosyasından kendisi kurar), CMake, Clang.
+
+- **Windows:** Visual Studio 2022 (C++ iş yükü), CMake, LLVM. MilkDrop
+  görselleştiricisi için vcpkg ve `vcpkg install glew:x64-windows-static`
+  gerekir; uğraşmak istemezsen MilkDrop'suz derle (aşağıda).
+- **macOS:** `xcode-select --install`, `brew install cmake llvm`
+- **Ubuntu/Debian:**
+  `sudo apt install libasound2-dev libpulse-dev libxkbcommon-dev libwayland-dev cmake clang libclang-dev`
+
+Sonra depo klasöründe:
+
+```sh
+cargo build --release                         # tam sürüm
+cargo build --release --no-default-features   # MilkDrop olmadan, daha az bağımlılık
+```
+
+Uygulama `target/release/leaximy` (Windows'ta `leaximy.exe`) olarak çıkar.
+Sisteme kurmak için: `cargo install --path .`
+
+Çalmak için **Spotify Premium** gerekir; ücretsiz hesap gezinip arama yapabilir.
+
+## Upstream'den yeni sürüm almak
+
+```sh
+git remote add upstream https://github.com/crmne/spotifast.git   # bir kez
+git fetch upstream --tags
+git rebase vX.Y.Z            # ya da: git merge vX.Y.Z
+python3 leaximy/rebrand.py   # yeni gelen "Spotifast" adlarını tekrar çevirir
+```
+
+Çakışma çoğunlukla `src/theme.rs` ve `src/util.rs` dosyalarında çıkar:
+oradaki Leaximy renklerini koru.

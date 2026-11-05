@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Leaximy
+GenericName=Music Player
+Comment=A native Spotify client
+Exec=leaximy %u
+Terminal=false
+Categories=AudioVideo;Audio;Player;Music;
+Keywords=spotify;music;player;streaming;leaximy;leaximy_legacy;
+Icon=leaximy
+StartupNotify=true
+StartupWMClass=leaximy
+MimeType=x-scheme-handler/spotify;

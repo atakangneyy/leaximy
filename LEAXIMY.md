@@ -77,3 +77,15 @@ python3 leaximy/rebrand.py   # yeni gelen "Spotifast" adlarını tekrar çevirir
 
 Çakışma çoğunlukla `src/theme.rs` ve `src/util.rs` dosyalarında çıkar:
 oradaki Leaximy renklerini koru.
+
+## Spotify girişi ve kullanıcı sınırı
+
+Leaximy, Spotify'a kendi Spotify geliştirici uygulamasıyla bağlanır
+(Client ID `src/auth.rs` içindeki `DEFAULT_WEB_CLIENT_ID`). Spotify'ın
+geliştirme modu kuralları gereği:
+
+- Uygulamanın [panelinde](https://developer.spotify.com/dashboard)
+  **Redirect URIs** listesinde `http://127.0.0.1:8989/login` bulunmalı.
+- Giriş yapabilecek herkes panelin **User Management** bölümüne adı ve
+  Spotify e-postasıyla eklenmeli. Sahibi dahil en fazla 5 kişi.
+- Listede olmayan biri giriş yapınca Spotify hata verir.

@@ -16,7 +16,7 @@ Spotifast MIT lisanslıdır; `LICENSE` dosyası olduğu gibi korunmalıdır.
 | Mini oynatıcı (yerleşik Winamp teması) | koyu gri + yeşil, "SPOTIFAST" | lacivert + kehribar, "LEAXIMY" |
 | Windows kurulumu | Spotifast kurulumu | `Leaximy-<sürüm>-Setup.exe`, Türkçe sihirbaz, ayrı uygulama kimliği |
 | Ayar, önbellek, oturum (anahtar zinciri), D-Bus/MPRIS adları | `spotifast` | `leaximy` (Spotifast ile karışmaz, ikisi yan yana çalışır) |
-| Otomatik güncelleme | GitHub'dan Spotifast sürümleri | kapalı (yoksa uygulamanın üzerine Spotifast yazılırdı) |
+| Otomatik güncelleme | GitHub'dan Spotifast sürümleri | açık: `atakangneyy/leaximy` sürümlerinden (kurulumla gelen kopyalar) |
 
 Renkler `src/theme.rs` içindeki `Palette::dark()` ve `Palette::light()`
 fonksiyonlarında, ikon `src/util.rs` içindeki `mark_rgba` fonksiyonunda,
@@ -102,3 +102,12 @@ Spotify, Kasım 2024'ten sonra açılan uygulamalara kendi listelerini
 - **Recommended for you** bölümü Spotify cevap vermediği için gizlenir.
 - Arama ve sanatçı albümleri sayfa başına 10 sonuçla çalışır (geliştirme
   modu sınırı).
+
+## Otomatik güncelleme
+
+Setup.exe ile kurulan Leaximy, günde bir kez bu deponun en son sürümüne
+(`v<sürüm>` etiketli) bakar, yenisini indirip doğrular ve "yeniden başlat"
+denince sessizce kurar. Yeni sürüm yayınlamak için `Cargo.toml` ve
+`Cargo.lock` içindeki sürümü artırıp `main`'e göndermek yeterli; iş akışı
+gereken dosyaları (`leaximy-v<sürüm>-x86_64-pc-windows-msvc-setup.exe`,
+`checksums.txt`) kendisi üretir. Taşınabilir exe kendini güncellemez.

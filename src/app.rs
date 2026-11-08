@@ -9500,8 +9500,7 @@ impl App {
     }
 
     fn check_for_updates(&mut self, manual: bool) {
-        // Leaximy is a fork: upstream's updater would replace it with
-        // the upstream app. Updates come from rebuilding the fork instead.
+        // Off only in a build that turns update checks off.
         if !crate::updates::ENABLED {
             if manual {
                 self.toast("Leaximy updates by rebuilding from source.");

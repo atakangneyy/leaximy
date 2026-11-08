@@ -52,16 +52,28 @@ jobs:
 
       # Inno Setup ships with the runner image. PowerShell, because bash on
       # Windows rewrites /D... arguments as paths.
+      #
+      # The in-app updater (src/updates.rs) reads the release tagged
+      # v<version> and needs leaximy-v<version>-x86_64-pc-windows-msvc-setup.exe
+      # with its SHA-256 in checksums.txt. Leaximy-<version>-Setup.exe is the
+      # same file under the name people download.
       - name: Installer
         shell: pwsh
         run: |
+          $version = "${{ steps.version.outputs.version }}"
           $iscc = (Get-Command iscc -ErrorAction SilentlyContinue).Source
           if (-not $iscc) { $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" }
-          & $iscc "/DVersion=${{ steps.version.outputs.version }}" /DArch=x86_64 `
+          & $iscc "/DVersion=$version" /DArch=x86_64 `
             "/DBinary=$PWD\target\release\leaximy.exe" `
             "/DOutputDir=$PWD\dist" packaging\windows\leaximy.iss
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          Copy-Item target\release\leaximy.exe "dist\Leaximy-${{ steps.version.outputs.version }}-portable.exe"
+          Copy-Item "dist\Leaximy-$version-Setup.exe" "dist\leaximy-v$version-x86_64-pc-windows-msvc-setup.exe"
+          Copy-Item target\release\leaximy.exe "dist\Leaximy-$version-portable.exe"
+          $lines = Get-ChildItem dist -File | Sort-Object Name | ForEach-Object {
+            "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"
+          }
+          [IO.File]::WriteAllText("$PWD\dist\checksums.txt", ($lines -join "`n") + "`n")
+          Get-Content dist\checksums.txt
 
       - uses: actions/upload-artifact@v4
         with:
@@ -72,7 +84,7 @@ jobs:
       - name: Publish on the Releases page
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: leaximy-v${{ steps.version.outputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
           target_commitish: ${{ github.sha }}
           name: Leaximy ${{ steps.version.outputs.version }}
           make_latest: true
@@ -81,6 +93,10 @@ jobs:
             **Kurulum:** `Leaximy-${{ steps.version.outputs.version }}-Setup.exe` dosyasını indir, çift tıkla, "İleri"ye bas.
             Yönetici izni gerekmez. Windows "bilinmeyen yayımcı" uyarısı verirse **Ek bilgi → Yine de çalıştır**.
 
-            **Kurulumsuz:** `Leaximy-${{ steps.version.outputs.version }}-portable.exe` doğrudan çalışır.
+            Kurulumdan sonra Leaximy kendini güncel tutar: yeni sürüm çıkınca kendisi indirir, "yeniden başlat" demen yeterli.
+
+            **Kurulumsuz:** `Leaximy-${{ steps.version.outputs.version }}-portable.exe` doğrudan çalışır (kendini güncellemez).
+
+            Diğer dosyalar Leaximy'nin otomatik güncellemesi içindir, indirmene gerek yok.
 
             Müzik çalmak için Spotify Premium gerekir.

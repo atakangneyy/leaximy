@@ -93,6 +93,9 @@ Name: "spotifylinks"; Description: "{cm:SpotifyLinks}"; GroupDescription: "{cm:I
 Source: "{#Binary}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\LEAXIMY.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+; Tells the in-app updater this copy came from the setup program, so an
+; update runs the new setup silently over it.
+Source: "leaximy-installer.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExeName}"

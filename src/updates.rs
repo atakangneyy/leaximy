@@ -12,29 +12,27 @@ pub use fastframe_update::{
 };
 use fastframe_update::{MacConfig, ReqwestTransport, UpdateConfig};
 
-/// Whether the app checks GitHub for new releases. Off in Leaximy: the
-/// configuration below still names upstream's releases, which would replace
-/// this fork with the upstream app.
-pub const ENABLED: bool = false;
+/// Whether the app checks GitHub for new releases.
+pub const ENABLED: bool = true;
 
+/// Leaximy updates from its own repository's releases, tagged `v<version>`,
+/// whose assets follow fastframe-update's names
+/// (`leaximy-v<version>-x86_64-pc-windows-msvc-setup.exe` and
+/// `checksums.txt`); .github/workflows/leaximy-windows.yml publishes them.
 pub const CONFIG: UpdateConfig = UpdateConfig {
-    // Leaximy_Legacy, the name before the rename: its marker files, `leaximy_legacy
-    // <version>` answers, and its Windows setup program's location.
-    legacy_names: &["leaximy_legacy"],
-    legacy_windows_installs: &["Programs/Leaximy_Legacy/fastpotify.exe"],
+    legacy_names: &[],
+    legacy_windows_installs: &[],
     macos: MacConfig {
-        bundle_ids: &["rocks.leaximy.Leaximy", "me.paolino.leaximy_legacy"],
-        // 0.9.1 kept "leaximy_legacy" for older clients' validation; later
-        // releases may rename it to "Leaximy" (#538).
-        executable_names: &["leaximy_legacy", "Leaximy"],
-        legacy_bundle_names: &["Leaximy_Legacy.app"],
+        bundle_ids: &["rocks.leaximy.Leaximy"],
+        executable_names: &["Leaximy"],
+        legacy_bundle_names: &[],
     },
     // Releases are verified against checksums.txt alone until they are
     // signed. Only a version shipped after the first signed release may
     // carry the key: from then on an unsigned release is refused.
     publisher_key: None,
     ..UpdateConfig::new(
-        "crmne/spotifast",
+        "atakangneyy/leaximy",
         "Leaximy",
         "leaximy",
         env!("CARGO_PKG_VERSION"),

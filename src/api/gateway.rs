@@ -61,10 +61,13 @@ struct ApiProfile {
 }
 
 impl ApiProfile {
+    // Leaximy's default app is in Development Mode, which rejects pages
+    // larger than ten for search and artist albums (Spotifast's shared app
+    // predates that rule and took 20 and 50).
     pub const SHARED: Self = Self {
         source: ApiSource::Shared,
-        search_limit: 20,
-        artist_albums_limit: 50,
+        search_limit: 10,
+        artist_albums_limit: 10,
     };
     pub const PERSONAL: Self = Self {
         source: ApiSource::Personal,

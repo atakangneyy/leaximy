@@ -89,3 +89,16 @@ geliştirme modu kuralları gereği:
 - Giriş yapabilecek herkes panelin **User Management** bölümüne adı ve
   Spotify e-postasıyla eklenmeli. Sahibi dahil en fazla 5 kişi.
 - Listede olmayan biri giriş yapınca Spotify hata verir.
+
+## Made for you ve öneriler
+
+Spotify, Kasım 2024'ten sonra açılan uygulamalara kendi listelerini
+(Discover Weekly, Release Radar, Daily Mix, daylist) aramada göstermiyor ve
+öneri servisini kapatıyor. Leaximy bu yüzden:
+
+- **Made for you** bölümünü, bu listelerden Spotify uygulamasında
+  kütüphanene kaydettiklerinle doldurur (müzik çalan oturum üzerinden okunur).
+  Kayıtlı liste yoksa bölüm görünmez.
+- **Recommended for you** bölümü Spotify cevap vermediği için gizlenir.
+- Arama ve sanatçı albümleri sayfa başına 10 sonuçla çalışır (geliştirme
+  modu sınırı).

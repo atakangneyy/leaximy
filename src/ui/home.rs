@@ -182,7 +182,6 @@ fn made_for_you(app: &mut App, ui: &mut egui::Ui) {
     let palette = app.palette;
     let mut playlists: Vec<Playlist> = Vec::new();
     let mut loading = false;
-    let mut failed = false;
     for term in DISCOVER_TERMS {
         match app.home.discover.get(*term) {
             Some(Loadable::Loaded(list)) => {
@@ -197,11 +196,22 @@ fn made_for_you(app: &mut App, ui: &mut egui::Ui) {
                 }
             }
             Some(Loadable::Loading) => loading = true,
-            Some(Loadable::Failed(_)) => failed = true,
             _ => {}
         }
     }
-    if playlists.is_empty() && !loading && !failed {
+    // Leaximy's app cannot find Spotify's own playlists by search, so the
+    // ones saved in the library are read over the streaming session.
+    for playlist in &app.library_made_for_you {
+        let duplicate = playlists.iter().any(|existing| {
+            existing.id == playlist.id || existing.name.eq_ignore_ascii_case(&playlist.name)
+        });
+        if !duplicate {
+            playlists.push(playlist.clone());
+        }
+    }
+    // A search that failed has nothing to retry into: Spotify keeps its
+    // own playlists from Leaximy's app, so an empty shelf stays hidden.
+    if playlists.is_empty() && !loading {
         return;
     }
     widgets::shelf(
@@ -212,9 +222,6 @@ fn made_for_you(app: &mut App, ui: &mut egui::Ui) {
         |ui| {
             if playlists.is_empty() && loading {
                 widgets::loading_row(ui, &palette, app.locale);
-            } else if playlists.is_empty() && failed {
-                let message = gettext(app.locale, "Couldn't load this shelf");
-                widgets::error_row(ui, app, &message, Some(Page::Home));
             }
             for playlist in &playlists {
                 let subtitle = playlist
@@ -664,6 +671,11 @@ fn top_tracks(app: &mut App, ui: &mut egui::Ui) {
 }
 
 fn recommendations(app: &mut App, ui: &mut egui::Ui) {
+    // Spotify closed recommendations to apps created since November 2024,
+    // Leaximy's among them: a shelf that can only fail stays hidden.
+    if matches!(app.home.recommendations, Loadable::Failed(_)) {
+        return;
+    }
     let tracks = app.home.recommendations.clone();
     let title = gettext(app.locale, "Recommended for you");
     track_list(app, ui, &title, tracks, 20, None, None);

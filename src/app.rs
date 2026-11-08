@@ -541,6 +541,12 @@ pub struct App {
     pub rootlist: Vec<crate::player::RootlistEntry>,
     /// Last good tree and the account it belongs to, kept across restarts.
     rootlist_cache: Option<CachedRootlist>,
+    /// Made for you playlists (Discover Weekly, Daily Mix...) the account
+    /// saved in its library, read over the streaming session: Leaximy's
+    /// Development Mode app cannot find Spotify's own playlists by search.
+    pub library_made_for_you: Vec<Playlist>,
+    /// Library playlists already looked up for the Made for you shelf.
+    made_for_you_looked_up: HashSet<String>,
     /// Playlists the account may add songs to by Spotify's own word, by
     /// URI: the ones shared with it by invitation, which the Web API's
     /// collaborative flag does not show. Empty until the session answers.
@@ -953,6 +959,8 @@ impl App {
             last_album_queue: None,
             rootlist: Vec::new(),
             rootlist_cache: session.rootlist.clone(),
+            library_made_for_you: Vec::new(),
+            made_for_you_looked_up: HashSet::new(),
             editable_by_grant: std::collections::BTreeSet::new(),
             pending_link: None,
             copied_songs: Vec::new(),
@@ -1905,6 +1913,7 @@ impl App {
                         });
                         self.rootlist = rootlist.entries;
                         self.editable_by_grant = rootlist.editable;
+                        self.look_up_library_made_for_you();
                         if let Some(account_id) = account_id {
                             self.rootlist_cache = Some(CachedRootlist {
                                 account_id,
@@ -2068,6 +2077,8 @@ impl App {
                 self.remote = None;
                 self.rootlist.clear();
                 self.rootlist_cache = None;
+                self.library_made_for_you.clear();
+                self.made_for_you_looked_up.clear();
                 self.editable_by_grant.clear();
                 self.session_dirty = true;
                 self.reset_data();
@@ -4776,7 +4787,59 @@ impl App {
         }
     }
 
+    /// Asks the streaming session for the library playlists the Web API's
+    /// list left out, which are Spotify's own; the ones that are Made for
+    /// you join that shelf. Each playlist is asked for once per sign-in.
+    fn look_up_library_made_for_you(&mut self) {
+        let listed: HashSet<&str> = self
+            .library
+            .playlists
+            .get()
+            .map(|playlists| playlists.iter().map(|playlist| playlist.id.as_str()).collect())
+            .unwrap_or_default();
+        let ids: Vec<String> = self
+            .rootlist
+            .iter()
+            .filter_map(|row| match row {
+                crate::player::RootlistEntry::Playlist(uri) => {
+                    uri.strip_prefix("spotify:playlist:")
+                }
+                _ => None,
+            })
+            .filter(|id| !listed.contains(id) && !self.made_for_you_looked_up.contains(*id))
+            .take(MADE_FOR_YOU_LOOKUPS)
+            .map(str::to_owned)
+            .collect();
+        for id in ids {
+            self.made_for_you_looked_up.insert(id.clone());
+            self.backend.api(ApiRequest::Playlist {
+                id,
+                generation: MADE_FOR_YOU_LOOKUP,
+            });
+        }
+    }
+
     fn handle_api(&mut self, mut response: ApiResponse) {
+        // A library playlist looked up for the Made for you shelf belongs to
+        // no open page; it joins the shelf if it is one of Spotify's own.
+        if let ApiResponse::Playlist {
+            id,
+            generation,
+            result,
+        } = &response
+            && *generation == MADE_FOR_YOU_LOOKUP
+        {
+            if let Ok(playlist) = result
+                && is_spotify_made(playlist)
+                && DISCOVER_TERMS
+                    .iter()
+                    .any(|term| is_made_for_you(&playlist.name, term))
+                && !self.library_made_for_you.iter().any(|known| known.id == *id)
+            {
+                self.library_made_for_you.push(playlist.clone());
+            }
+            return;
+        }
         match &mut response {
             ApiResponse::Playlist {
                 id,
@@ -10346,6 +10409,19 @@ fn friendly_page_error(locale: Locale, error: &crate::api::ApiError) -> String {
         .into_owned(),
         _ => error.to_string(),
     }
+}
+
+/// The generation a Made for you library lookup carries, which no page
+/// uses, so its answer is never taken for an open playlist's.
+const MADE_FOR_YOU_LOOKUP: u64 = u64::MAX;
+
+/// At most this many library playlists are looked up per rootlist.
+const MADE_FOR_YOU_LOOKUPS: usize = 60;
+
+/// Whether Spotify made `playlist`. The streaming session often gives no
+/// owner, but Spotify's own playlists all have ids starting `37i9dQZ`.
+fn is_spotify_made(playlist: &Playlist) -> bool {
+    playlist.owner.id.as_deref() == Some("spotify") || playlist.id.starts_with("37i9dQZ")
 }
 
 /// Whether a Spotify-owned playlist named `name` is the personal one the

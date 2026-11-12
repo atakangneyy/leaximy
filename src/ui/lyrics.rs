@@ -301,44 +301,167 @@ pub fn fullscreen(app: &mut App, ui: &mut egui::Ui) {
         });
 }
 
-/// The desktop visualizer: the playing song's backdrop across the whole
-/// screen, its round cover with the ring of bars in the middle, and the line
-/// being sung beneath, behind the desktop icons. Nothing in it takes input.
+/// The words of the line being sung that have been reached at
+/// `position_ms`, and the whole line. Lyrics are timed by line, so the words
+/// are spread over the line's time: an estimate of when each is sung.
+fn sung_words(lyrics: &crate::lyrics::Lyrics, position_ms: u32) -> Option<(String, String)> {
+    let index = lyrics.active_line(position_ms)?;
+    let line = lyrics.lines.get(index)?;
+    let start = line.at_ms?;
+    let words: Vec<&str> = line.text.split_whitespace().collect();
+    if words.is_empty() {
+        return None;
+    }
+    let until_next = lyrics
+        .lines
+        .get(index + 1)
+        .and_then(|next| next.at_ms)
+        .map_or(4000, |next| next.saturating_sub(start));
+    // A line is sung in about half a second a word, however long the gap
+    // before the next one.
+    let span = until_next.clamp(400, 450 * words.len() as u32 + 600);
+    let progress = position_ms.saturating_sub(start) as f32 / span as f32;
+    let count = ((progress * words.len() as f32) as usize + 1).min(words.len());
+    Some((shout(&words[..count].join(" ")), shout(&words.join(" "))))
+}
+
+/// `text` in capitals, with Turkish dotted and dotless i kept apart when the
+/// line reads as Turkish.
+fn shout(text: &str) -> String {
+    let turkish = text.chars().any(|c| "ğşıİĞŞ".contains(c));
+    if turkish {
+        text.replace('i', "İ").replace('ı', "I").to_uppercase()
+    } else {
+        text.to_uppercase()
+    }
+}
+
+/// The desktop visualizer, behind the desktop icons: the user's own
+/// wallpaper, the line being sung in large capitals on the left, appearing
+/// word by word, the round cover with its ring of bars right of the middle,
+/// and the songs up next in the lower left. Nothing in it takes input.
 pub fn wallpaper(app: &mut App, ui: &mut egui::Ui) {
     egui::CentralPanel::default()
-        .frame(Frame::new().fill(theme::Palette::dark().window))
+        .frame(Frame::new().fill(Color32::BLACK))
         .show(ui, |ui| {
             let rect = ui.max_rect();
-            background(app, ui, rect);
+            if let Some(texture) = app.desktop_backdrop(ui.ctx()) {
+                theme::apply_local(ui, &theme::Palette::dark());
+                let painter = ui.painter().with_clip_rect(rect);
+                painter.image(
+                    texture.id(),
+                    rect,
+                    cover_uv(rect.size(), texture.size_vec2()),
+                    Color32::WHITE,
+                );
+                // A light veil so white words read on a bright picture.
+                painter.rect_filled(rect, 0.0, Color32::from_black_alpha(50));
+            } else {
+                background(app, ui, rect);
+            }
             let Some(now) = app.now_playing() else {
                 return;
             };
-            let side = (rect.height() * 0.5)
-                .min(rect.width() * 0.4)
-                .clamp(200.0, 720.0);
-            let column = Rect::from_center_size(rect.center(), vec2(side, side + 90.0));
+
+            // The disc, right of the middle.
+            let side = (rect.height() * 0.46)
+                .min(rect.width() * 0.3)
+                .clamp(200.0, 640.0);
+            let centre = pos2(rect.left() + rect.width() * 0.66, rect.center().y);
+            let column = Rect::from_center_size(centre, vec2(side, side + 90.0));
             big_cover(app, ui, column, Align::Center);
-            let line = match &app.lyrics {
-                Loadable::Loaded(Some(lyrics)) => lyrics
-                    .active_line(now.position_ms)
-                    .and_then(|index| lyrics.lines.get(index))
-                    .map(|line| line.text.trim().to_owned())
-                    .filter(|text| !text.is_empty()),
+
+            // The words, left of the disc.
+            let left = rect.left() + rect.width() * 0.06;
+            let wrap = (column.left() - 48.0 - left).max(200.0);
+            let words = match &app.lyrics {
+                Loadable::Loaded(Some(lyrics)) => sung_words(lyrics, now.position_ms),
                 _ => None,
             };
-            if let Some(line) = line {
-                ui.painter().text(
-                    pos2(rect.center().x, column.bottom() + 28.0),
-                    egui::Align2::CENTER_TOP,
-                    line,
-                    theme::bold(30.0),
-                    Color32::WHITE,
+            if let Some((shown, whole)) = words {
+                let font = theme::bold((rect.height() * 0.058).clamp(28.0, 72.0));
+                let painter = ui.painter().with_clip_rect(rect);
+                // The whole line fixes the place, so words arrive without
+                // moving the ones before them.
+                let full = painter.layout(whole, font.clone(), Color32::WHITE, wrap);
+                let at = pos2(left, rect.center().y - full.size().y / 2.0);
+                let shadow = painter.layout(
+                    shown.clone(),
+                    font.clone(),
+                    Color32::from_black_alpha(170),
+                    wrap,
                 );
+                painter.galley(at + vec2(2.0, 3.0), shadow, Color32::BLACK);
+                let text = painter.layout(shown, font, Color32::WHITE, wrap);
+                painter.galley(at, text, Color32::WHITE);
             }
-            // The sung line changes with the song, whoever plays it.
+
+            // Up next, in the lower left.
+            let upcoming: Vec<(String, String, Option<String>)> = app
+                .queue
+                .get()
+                .map(|queue| {
+                    queue
+                        .queue
+                        .iter()
+                        .take(4)
+                        .map(|item| {
+                            (
+                                item.name().to_owned(),
+                                item.subtitle(),
+                                item.image(64).map(str::to_owned),
+                            )
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            if !upcoming.is_empty() {
+                let row = 58.0;
+                let top = rect.bottom() - 96.0 - row * upcoming.len() as f32;
+                let zone = Rect::from_min_max(
+                    pos2(left, top - 28.0),
+                    pos2(left + wrap.min(420.0), rect.bottom()),
+                );
+                let painter = ui.painter().with_clip_rect(zone);
+                painter.text(
+                    pos2(left, top - 26.0),
+                    egui::Align2::LEFT_TOP,
+                    gettext(app.locale, "Next up"),
+                    theme::semibold(12.0),
+                    theme::Palette::dark().accent,
+                );
+                for (index, (name, artists, art)) in upcoming.iter().enumerate() {
+                    let y = top + row * index as f32;
+                    let cover = Rect::from_min_size(pos2(left, y), vec2(46.0, 46.0));
+                    widgets::paint_cover(
+                        ui,
+                        &theme::Palette::dark(),
+                        art.as_deref(),
+                        cover,
+                        6.0,
+                        Icon::Music,
+                        Some(app.backend.art()),
+                    );
+                    painter.text(
+                        pos2(cover.right() + 12.0, y + 4.0),
+                        egui::Align2::LEFT_TOP,
+                        name,
+                        theme::semibold(15.0),
+                        Color32::WHITE,
+                    );
+                    painter.text(
+                        pos2(cover.right() + 12.0, y + 25.0),
+                        egui::Align2::LEFT_TOP,
+                        artists,
+                        theme::regular(12.0),
+                        Color32::from_gray(215),
+                    );
+                }
+            }
+            // The words move with the song, whoever plays it.
             if now.playing {
                 ui.ctx()
-                    .request_repaint_after(std::time::Duration::from_millis(250));
+                    .request_repaint_after(std::time::Duration::from_millis(60));
             }
         });
 }

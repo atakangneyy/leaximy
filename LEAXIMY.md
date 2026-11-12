@@ -121,9 +121,11 @@ aynalı) ve disk basla birlikte hafifçe büyür. Yalnızca bu bilgisayarda çal
 
 ## Masaüstü görselleştirici (Windows)
 
-Oynatma çubuğundaki dizüstü bilgisayar simgesi, ritim halkasını masaüstüne,
-simgelerin arkasına (duvar kâğıdının yerine) koyar: ortada yuvarlak kapak ve
-halka, altında söylenen şarkı sözü satırı, arkada kapaktan gelen fon. Ana
-ekranı kaplar; Leaximy açık (ya da simge durumunda) olduğu sürece görünür,
-simge kapatılınca kalkar. Pencereyi `src/wallpaper.rs` simgelerin arkasına
+Oynatma çubuğundaki dizüstü bilgisayar simgesi görselleştiriciyi masaüstüne,
+simgelerin arkasına koyar. Arka plan kullanıcının kendi duvar kâğıdıdır
+(açılırken Windows'tan okunur). Solda söylenen satır büyük harflerle, kelime
+kelime belirir; ortanın sağında yuvarlak kapak ve ritim halkası, sol altta
+sıradaki dört şarkı durur. Sözler satır satır zamanlandığı için kelimelerin
+anı satır süresine yayılarak tahmin edilir. Ana ekranı kaplar; Leaximy açık
+(ya da simge durumunda) olduğu sürece görünür. Pencereyi `src/wallpaper.rs`
 yerleştirir, içeriğini `src/ui/lyrics.rs` içindeki `wallpaper` çizer.

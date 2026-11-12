@@ -17,9 +17,9 @@ use windows_sys::Win32::Foundation::{HWND, LPARAM};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     EnumWindows, FindWindowExW, FindWindowW, GWL_EXSTYLE, GWL_STYLE, GetSystemMetrics,
     GetWindowLongPtrW, LWA_ALPHA, SM_CXSCREEN, SM_CYSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
-    SMTO_NORMAL, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW,
+    SMTO_NORMAL, SPI_GETDESKWALLPAPER, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW,
     SendMessageTimeoutW, SetLayeredWindowAttributes, SetParent, SetWindowLongPtrW, SetWindowPos,
-    WS_CHILD, WS_EX_LAYERED, WS_POPUP,
+    SystemParametersInfoW, WS_CHILD, WS_EX_LAYERED, WS_POPUP,
 };
 
 use crate::app::App;
@@ -35,6 +35,51 @@ static CHECKED: Mutex<Option<Instant>> = Mutex::new(None);
 
 fn wide(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(std::iter::once(0)).collect()
+}
+
+/// The picture Windows shows as the desktop wallpaper, so the visualizer can
+/// draw over it instead of replacing it. `None` when there is none to read
+/// (a plain colour, or a file the decoder does not know).
+pub fn desktop_image() -> Option<egui::ColorImage> {
+    let mut buffer = [0u16; 520];
+    // SAFETY: the buffer is 520 UTF-16 units long, as the call is told.
+    let read = unsafe {
+        SystemParametersInfoW(
+            SPI_GETDESKWALLPAPER,
+            buffer.len() as u32,
+            buffer.as_mut_ptr().cast(),
+            0,
+        )
+    };
+    let mut candidates = Vec::new();
+    if read != 0 {
+        let length = buffer.iter().position(|unit| *unit == 0).unwrap_or(0);
+        if length > 0 {
+            candidates.push(std::path::PathBuf::from(String::from_utf16_lossy(
+                &buffer[..length],
+            )));
+        }
+    }
+    // Where Windows keeps its own copy of the current wallpaper.
+    if let Some(roaming) = std::env::var_os("APPDATA") {
+        candidates.push(
+            std::path::PathBuf::from(roaming).join("Microsoft/Windows/Themes/TranscodedWallpaper"),
+        );
+    }
+    candidates.into_iter().find_map(|path| {
+        let decoded = image::ImageReader::open(path)
+            .ok()?
+            .with_guessed_format()
+            .ok()?
+            .decode()
+            .ok()?;
+        let pixels = decoded.thumbnail(2560, 2560).to_rgba8();
+        let size = [pixels.width() as usize, pixels.height() as usize];
+        Some(egui::ColorImage::from_rgba_unmultiplied(
+            size,
+            pixels.as_raw(),
+        ))
+    })
 }
 
 /// Draws the visualizer in its own window and keeps it behind the icons.

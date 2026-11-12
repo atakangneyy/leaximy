@@ -578,6 +578,9 @@ pub struct App {
     pub player_bar_analyser: crate::vis::WideAnalyser,
     /// The spectrum ringing the round cover in fullscreen lyrics.
     pub cover_ring_analyser: crate::vis::WideAnalyser,
+    /// The user's own desktop wallpaper, behind the desktop visualizer.
+    desktop_backdrop: Option<egui::TextureHandle>,
+    desktop_backdrop_tried: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -980,6 +983,8 @@ impl App {
             winamp: crate::winamp::WinampState::new(session.winamp_pos, tap, eq),
             player_bar_analyser: crate::vis::WideAnalyser::default(),
             cover_ring_analyser: crate::vis::WideAnalyser::default(),
+            desktop_backdrop: None,
+            desktop_backdrop_tried: false,
         };
         app.local.volume = app.settings.volume;
         // What was played here is on disk and needs nothing from the
@@ -2685,6 +2690,7 @@ impl App {
         }
         if matches!(self.page(), Page::Queue)
             || self.show_queue_panel
+            || self.settings.desktop_visualizer
             || (self.settings.winamp_window && self.settings.playlist_open)
         {
             self.refresh_queue(true);
@@ -2692,6 +2698,22 @@ impl App {
         if self.show_lyrics_panel || self.settings.desktop_visualizer {
             self.request_lyrics();
         }
+    }
+
+    /// The user's desktop wallpaper as a texture, read once each time the
+    /// desktop visualizer is turned on.
+    pub fn desktop_backdrop(&mut self, ctx: &egui::Context) -> Option<egui::TextureHandle> {
+        let _ = ctx;
+        if !self.desktop_backdrop_tried {
+            self.desktop_backdrop_tried = true;
+            #[cfg(windows)]
+            {
+                self.desktop_backdrop = crate::wallpaper::desktop_image().map(|image| {
+                    ctx.load_texture("desktop-backdrop", image, egui::TextureOptions::LINEAR)
+                });
+            }
+        }
+        self.desktop_backdrop.clone()
     }
 
     /// Asks for the playing track's lyrics unless they are here or on the
@@ -9362,6 +9384,9 @@ impl App {
             Action::ToggleDesktopVisualizer => {
                 self.settings.desktop_visualizer = !self.settings.desktop_visualizer;
                 self.settings_dirty = true;
+                // Read the wallpaper again next time: it may have changed.
+                self.desktop_backdrop = None;
+                self.desktop_backdrop_tried = false;
             }
             Action::CyclePlayerBarVis => {
                 self.settings.player_bar_vis = self.settings.player_bar_vis.next();

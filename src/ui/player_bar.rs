@@ -899,6 +899,23 @@ fn extras(app: &mut App, ui: &mut egui::Ui, now: Option<&NowPlaying>) {
                 .collect(),
         });
     }
+    if cfg!(windows)
+        && theme::icon_button(
+            ui,
+            Icon::Laptop,
+            18.0,
+            if app.settings.desktop_visualizer {
+                palette.accent
+            } else {
+                palette.secondary
+            },
+            palette.text,
+            &gettext(app.locale, "Desktop visualizer"),
+        )
+        .clicked()
+    {
+        app.actions.push(Action::ToggleDesktopVisualizer);
+    }
     if theme::icon_button(
         ui,
         Icon::Mic,

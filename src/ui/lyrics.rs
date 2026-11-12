@@ -301,6 +301,48 @@ pub fn fullscreen(app: &mut App, ui: &mut egui::Ui) {
         });
 }
 
+/// The desktop visualizer: the playing song's backdrop across the whole
+/// screen, its round cover with the ring of bars in the middle, and the line
+/// being sung beneath, behind the desktop icons. Nothing in it takes input.
+pub fn wallpaper(app: &mut App, ui: &mut egui::Ui) {
+    egui::CentralPanel::default()
+        .frame(Frame::new().fill(theme::Palette::dark().window))
+        .show(ui, |ui| {
+            let rect = ui.max_rect();
+            background(app, ui, rect);
+            let Some(now) = app.now_playing() else {
+                return;
+            };
+            let side = (rect.height() * 0.5)
+                .min(rect.width() * 0.4)
+                .clamp(200.0, 720.0);
+            let column = Rect::from_center_size(rect.center(), vec2(side, side + 90.0));
+            big_cover(app, ui, column, Align::Center);
+            let line = match &app.lyrics {
+                Loadable::Loaded(Some(lyrics)) => lyrics
+                    .active_line(now.position_ms)
+                    .and_then(|index| lyrics.lines.get(index))
+                    .map(|line| line.text.trim().to_owned())
+                    .filter(|text| !text.is_empty()),
+                _ => None,
+            };
+            if let Some(line) = line {
+                ui.painter().text(
+                    pos2(rect.center().x, column.bottom() + 28.0),
+                    egui::Align2::CENTER_TOP,
+                    line,
+                    theme::bold(30.0),
+                    Color32::WHITE,
+                );
+            }
+            // The sung line changes with the song, whoever plays it.
+            if now.playing {
+                ui.ctx()
+                    .request_repaint_after(std::time::Duration::from_millis(250));
+            }
+        });
+}
+
 /// The widest the lyrics get beside the cover, so lines stay easy to read.
 const LYRICS_BESIDE_WIDTH: f32 = 640.0;
 

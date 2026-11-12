@@ -53,6 +53,8 @@ pub mod ui;
 pub mod updates;
 pub mod util;
 pub mod vis;
+#[cfg(windows)]
+pub mod wallpaper;
 pub mod winamp;
 pub mod window;
 pub mod zeroconf;

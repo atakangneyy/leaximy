@@ -2689,7 +2689,7 @@ impl App {
         {
             self.refresh_queue(true);
         }
-        if self.show_lyrics_panel {
+        if self.show_lyrics_panel || self.settings.desktop_visualizer {
             self.request_lyrics();
         }
     }
@@ -9359,6 +9359,10 @@ impl App {
             // The same request the window's own close button makes, so the
             // close-to-tray setting decides what follows.
             Action::CloseWindow => ctx.send_viewport_cmd(egui::ViewportCommand::Close),
+            Action::ToggleDesktopVisualizer => {
+                self.settings.desktop_visualizer = !self.settings.desktop_visualizer;
+                self.settings_dirty = true;
+            }
             Action::CyclePlayerBarVis => {
                 self.settings.player_bar_vis = self.settings.player_bar_vis.next();
                 self.settings_dirty = true;
@@ -9836,6 +9840,17 @@ impl App {
             crate::ui::winamp::show(self, ui);
         } else {
             crate::ui::show(self, ui);
+        }
+        // The visualizer behind the desktop icons is a window of its own,
+        // drawn while the main one is, minimized or not.
+        #[cfg(windows)]
+        {
+            if self.settings.desktop_visualizer {
+                let desktop = ui.ctx().clone();
+                crate::wallpaper::show(self, &desktop);
+            } else {
+                crate::wallpaper::hide();
+            }
         }
         self.apply_actions(ctx);
         let autoscroll = self.autoscroll.finish(

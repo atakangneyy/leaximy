@@ -297,6 +297,8 @@ pub struct Settings {
     pub playback_authorized: bool,
     /// Closing the window hides to the tray and keeps the music playing.
     pub keep_playing_in_background: bool,
+    /// Draw the visualizer behind the desktop icons (Windows).
+    pub desktop_visualizer: bool,
     /// Ask GitHub once a day whether a newer release exists.
     pub check_for_updates: bool,
     pub download_updates_automatically: bool,
@@ -447,6 +449,7 @@ impl Default for Settings {
             personal_app_intro_seen: false,
             playback_authorized: false,
             keep_playing_in_background: true,
+            desktop_visualizer: false,
             check_for_updates: true,
             download_updates_automatically: false,
             pinned_contexts: Vec::new(),

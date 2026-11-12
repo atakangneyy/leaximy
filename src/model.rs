@@ -1081,6 +1081,8 @@ pub enum Action {
     ToggleSidebar,
     ToggleQueuePanel,
     ToggleLyricsPanel,
+    /// Turns the visualizer behind the desktop icons on or off.
+    ToggleDesktopVisualizer,
     SetLyricsFullscreen(bool),
     LyricsLineShown(Option<usize>),
     FollowLyrics,

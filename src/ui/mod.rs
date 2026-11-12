@@ -676,3 +676,8 @@ mod tests {
         }
     }
 }
+
+/// The desktop visualizer's contents, drawn in its own window.
+pub fn wallpaper(app: &mut App, ui: &mut egui::Ui) {
+    lyrics::wallpaper(app, ui);
+}

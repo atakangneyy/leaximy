@@ -118,3 +118,12 @@ Tam ekran şarkı sözleri görünümünde kapak yuvarlak bir disk olarak çizil
 çevresindeki çubuklar çalan sesin spektrumunu gösterir (bas üstte, iki yana
 aynalı) ve disk basla birlikte hafifçe büyür. Yalnızca bu bilgisayarda çalan
 şarkıda hareket eder. Kod: `src/ui/lyrics.rs` içindeki `big_cover`.
+
+## Masaüstü görselleştirici (Windows)
+
+Oynatma çubuğundaki dizüstü bilgisayar simgesi, ritim halkasını masaüstüne,
+simgelerin arkasına (duvar kâğıdının yerine) koyar: ortada yuvarlak kapak ve
+halka, altında söylenen şarkı sözü satırı, arkada kapaktan gelen fon. Ana
+ekranı kaplar; Leaximy açık (ya da simge durumunda) olduğu sürece görünür,
+simge kapatılınca kalkar. Pencereyi `src/wallpaper.rs` simgelerin arkasına
+yerleştirir, içeriğini `src/ui/lyrics.rs` içindeki `wallpaper` çizer.

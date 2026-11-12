@@ -301,10 +301,10 @@ pub fn fullscreen(app: &mut App, ui: &mut egui::Ui) {
         });
 }
 
-/// The words of the line being sung that have been reached at
-/// `position_ms`, and the whole line. Lyrics are timed by line, so the words
+/// The words of the line being sung, in capitals, and how many of them
+/// have been reached at `position_ms`. Lyrics are timed by line, so the words
 /// are spread over the line's time: an estimate of when each is sung.
-fn sung_words(lyrics: &crate::lyrics::Lyrics, position_ms: u32) -> Option<(String, String)> {
+fn sung_words(lyrics: &crate::lyrics::Lyrics, position_ms: u32) -> Option<(Vec<String>, usize)> {
     let index = lyrics.active_line(position_ms)?;
     let line = lyrics.lines.get(index)?;
     let start = line.at_ms?;
@@ -322,7 +322,19 @@ fn sung_words(lyrics: &crate::lyrics::Lyrics, position_ms: u32) -> Option<(Strin
     let span = until_next.clamp(400, 450 * words.len() as u32 + 600);
     let progress = position_ms.saturating_sub(start) as f32 / span as f32;
     let count = ((progress * words.len() as f32) as usize + 1).min(words.len());
-    Some((shout(&words[..count].join(" ")), shout(&words.join(" "))))
+    Some((words.iter().map(|word| shout(word)).collect(), count))
+}
+
+/// Whether `word` (in capitals) is a small connecting word, drawn small
+/// between the large ones.
+fn minor_word(word: &str) -> bool {
+    const MINOR: &[&str] = &[
+        "I", "A", "AN", "THE", "IN", "ON", "MY", "IS", "AM", "OF", "TO", "AT", "IT", "ME", "WE",
+        "BE", "SO", "OR", "IF", "AS", "BY", "DO", "UP", "US", "HE", "VE", "BİR", "BU", "DE", "DA",
+        "Kİ", "Mİ", "MI", "MU", "MÜ", "İLE", "BEN", "SEN", "O", "NE", "YA",
+    ];
+    let bare: String = word.chars().filter(|c| c.is_alphanumeric()).collect();
+    MINOR.contains(&bare.as_str())
 }
 
 /// `text` in capitals, with Turkish dotted and dotless i kept apart when the
@@ -378,22 +390,70 @@ pub fn wallpaper(app: &mut App, ui: &mut egui::Ui) {
                 Loadable::Loaded(Some(lyrics)) => sung_words(lyrics, now.position_ms),
                 _ => None,
             };
-            if let Some((shown, whole)) = words {
-                let font = theme::bold((rect.height() * 0.058).clamp(28.0, 72.0));
+            if let Some((words, count)) = words {
+                // Stacked rows centred on one point, one large word to a
+                // row with the small connecting words tucked beside it.
+                let big = theme::bold((rect.height() * 0.075).clamp(32.0, 92.0));
+                let small = theme::semibold(big.size * 0.46);
+                let accent = theme::Palette::dark().accent;
                 let painter = ui.painter().with_clip_rect(rect);
-                // The whole line fixes the place, so words arrive without
-                // moving the ones before them.
-                let full = painter.layout(whole, font.clone(), Color32::WHITE, wrap);
-                let at = pos2(left, rect.center().y - full.size().y / 2.0);
-                let shadow = painter.layout(
-                    shown.clone(),
-                    font.clone(),
-                    Color32::from_black_alpha(170),
-                    wrap,
-                );
-                painter.galley(at + vec2(2.0, 3.0), shadow, Color32::BLACK);
-                let text = painter.layout(shown, font, Color32::WHITE, wrap);
-                painter.galley(at, text, Color32::WHITE);
+                let laid: Vec<_> = words
+                    .iter()
+                    .map(|word| {
+                        let minor = minor_word(word);
+                        let galley = if minor {
+                            painter.layout_no_wrap(word.clone(), small.clone(), accent)
+                        } else {
+                            painter.layout_no_wrap(word.clone(), big.clone(), Color32::WHITE)
+                        };
+                        (galley, minor)
+                    })
+                    .collect();
+                let gap = big.size * 0.22;
+                let mut rows: Vec<Vec<usize>> = vec![Vec::new()];
+                let (mut width, mut majors) = (0.0_f32, 0);
+                for (index, (galley, minor)) in laid.iter().enumerate() {
+                    let wide = galley.size().x;
+                    let full = !rows.last().is_some_and(Vec::is_empty)
+                        && (width + gap + wide > wrap || (!*minor && majors >= 1));
+                    if full {
+                        rows.push(Vec::new());
+                        width = 0.0;
+                        majors = 0;
+                    }
+                    width += wide + if width > 0.0 { gap } else { 0.0 };
+                    if !*minor {
+                        majors += 1;
+                    }
+                    if let Some(row) = rows.last_mut() {
+                        row.push(index);
+                    }
+                }
+                let row_height = big.size * 1.08;
+                let middle = left + wrap.min(rect.width() * 0.36) / 2.0;
+                let top = rect.center().y - row_height * rows.len() as f32 / 2.0;
+                for (line, row) in rows.iter().enumerate() {
+                    let total: f32 = row.iter().map(|index| laid[*index].0.size().x).sum::<f32>()
+                        + gap * row.len().saturating_sub(1) as f32;
+                    let mut x = middle - total / 2.0;
+                    let y = top + row_height * line as f32;
+                    for index in row {
+                        let (galley, minor) = &laid[*index];
+                        let size = galley.size();
+                        if *index < count {
+                            // Small words sit on the large words' baseline.
+                            let drop = if *minor { (big.size - small.size) * 0.82 } else { 0.0 };
+                            let at = pos2(x, y + drop);
+                            painter.galley_with_override_text_color(
+                                at + vec2(2.0, 3.0),
+                                galley.clone(),
+                                Color32::from_black_alpha(170),
+                            );
+                            painter.galley(at, galley.clone(), Color32::WHITE);
+                        }
+                        x += size.x + gap;
+                    }
+                }
             }
 
             // Up next, in the lower left.

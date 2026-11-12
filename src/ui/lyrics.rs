@@ -409,15 +409,77 @@ fn with_cover(app: &mut App, ui: &mut egui::Ui, rect: Rect, top: f32) {
     }
 }
 
-/// The playing song's cover filling the top of `column`, with its title and
-/// artists beneath, aligned to its left edge or centred.
-fn big_cover(app: &App, ui: &mut egui::Ui, column: Rect, align: Align) {
+/// How much of the cover's square the round cover fills; the rest is room
+/// for the ring of bars around it.
+const DISC_FILL: f32 = 0.7;
+
+/// How often the ring of bars is redrawn while a song sounds.
+const RING_FRAME: std::time::Duration = std::time::Duration::from_micros(16_667);
+
+/// The playing song's cover as a round disc in the top of `column`, ringed
+/// by the spectrum of the sound (bass at the top, mirrored down both sides)
+/// and swelling a little with the bass, with its title and artists beneath,
+/// aligned to its left edge or centred. Like every visualizer it shows the
+/// sound after the equalizer and before the volume, and only moves for a
+/// song playing on this computer.
+fn big_cover(app: &mut App, ui: &mut egui::Ui, column: Rect, align: Align) {
+    use crate::vis;
     let Some(now) = app.now_playing() else {
         return;
     };
     let side = column.width();
-    let cover = Rect::from_min_size(column.min, vec2(side, side));
-    let radius = 10.0;
+    let square = Rect::from_min_size(column.min, vec2(side, side));
+
+    let sounding = (now.playing || now.loading) && now.local;
+    let moving = sounding || !app.cover_ring_analyser.settled();
+    let levels = if moving {
+        let samples = if sounding {
+            app.winamp.tap.window(vis::WIDE_SAMPLES, vis::LAG)
+        } else {
+            Vec::new()
+        };
+        app.cover_ring_analyser
+            .step(&samples, std::time::Instant::now())
+    } else {
+        [0.0; vis::WIDE_BANDS]
+    };
+    if moving {
+        ui.ctx().request_repaint_after(RING_FRAME);
+    }
+    let low = (levels.len() / 8).max(1);
+    let bass = levels.iter().take(low).sum::<f32>() / low as f32;
+
+    let centre = square.center();
+    let disc = side * DISC_FILL * (1.0 + 0.035 * bass);
+    let cover = Rect::from_center_size(centre, vec2(disc, disc));
+    let radius = disc / 2.0;
+
+    // The ring: one bar per band on each side, from the top round to the
+    // bottom, amber at rest and whitening as it rises.
+    let accent = theme::Palette::dark().accent;
+    let reach = (side / 2.0 - radius - 6.0).max(0.0);
+    let bands = levels.len();
+    let thickness = (std::f32::consts::PI * radius / bands as f32 * 0.55).clamp(1.5, 5.0);
+    let painter = ui.painter().with_clip_rect(square.expand(4.0));
+    for (index, level) in levels.iter().enumerate() {
+        let length = 2.0 + level * reach;
+        let colour = accent
+            .lerp_to_gamma(Color32::WHITE, *level)
+            .gamma_multiply(0.55 + 0.45 * level);
+        let turn = (index as f32 + 0.5) / bands as f32 * std::f32::consts::PI;
+        for side_sign in [-1.0_f32, 1.0] {
+            let angle = side_sign * turn - std::f32::consts::FRAC_PI_2;
+            let direction = vec2(angle.cos(), angle.sin());
+            painter.line_segment(
+                [
+                    centre + direction * (radius + 4.0),
+                    centre + direction * (radius + 4.0 + length),
+                ],
+                egui::Stroke::new(thickness, colour),
+            );
+        }
+    }
+
     ui.painter().add(
         egui::epaint::Shadow {
             offset: [0, 18],
@@ -436,6 +498,13 @@ fn big_cover(app: &App, ui: &mut egui::Ui, column: Rect, align: Align) {
         Icon::Music,
         Some(app.backend.art()),
     );
+    // A thin amber edge, brighter with the bass.
+    ui.painter().circle_stroke(
+        centre,
+        radius,
+        egui::Stroke::new(1.5, accent.gamma_multiply(0.35 + 0.65 * bass)),
+    );
+    let cover = square;
     let words = Rect::from_min_max(pos2(column.left(), cover.bottom() + 18.0), column.max);
     let mut text = ui.new_child(
         UiBuilder::new()

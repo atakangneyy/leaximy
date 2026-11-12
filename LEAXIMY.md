@@ -111,3 +111,10 @@ denince sessizce kurar. Yeni sürüm yayınlamak için `Cargo.toml` ve
 `Cargo.lock` içindeki sürümü artırıp `main`'e göndermek yeterli; iş akışı
 gereken dosyaları (`leaximy-v<sürüm>-x86_64-pc-windows-msvc-setup.exe`,
 `checksums.txt`) kendisi üretir. Taşınabilir exe kendini güncellemez.
+
+## Tam ekran şarkı sözlerinde ritim halkası
+
+Tam ekran şarkı sözleri görünümünde kapak yuvarlak bir disk olarak çizilir;
+çevresindeki çubuklar çalan sesin spektrumunu gösterir (bas üstte, iki yana
+aynalı) ve disk basla birlikte hafifçe büyür. Yalnızca bu bilgisayarda çalan
+şarkıda hareket eder. Kod: `src/ui/lyrics.rs` içindeki `big_cover`.

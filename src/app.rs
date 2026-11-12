@@ -4854,11 +4854,11 @@ impl App {
         } = &response
             && *generation == MADE_FOR_YOU_LOOKUP
         {
+            // Any playlist Spotify made counts: their names are translated
+            // (Discover Weekly is "Haftalık Keşif" in Turkish), so the
+            // English names cannot pick them out.
             if let Ok(playlist) = result
                 && is_spotify_made(playlist)
-                && DISCOVER_TERMS
-                    .iter()
-                    .any(|term| is_made_for_you(&playlist.name, term))
                 && !self.library_made_for_you.iter().any(|known| known.id == *id)
             {
                 self.library_made_for_you.push(playlist.clone());
@@ -10462,7 +10462,7 @@ const MADE_FOR_YOU_LOOKUPS: usize = 60;
 
 /// Whether Spotify made `playlist`. The streaming session often gives no
 /// owner, but Spotify's own playlists all have ids starting `37i9dQZ`.
-fn is_spotify_made(playlist: &Playlist) -> bool {
+pub(crate) fn is_spotify_made(playlist: &Playlist) -> bool {
     playlist.owner.id.as_deref() == Some("spotify") || playlist.id.starts_with("37i9dQZ")
 }
 

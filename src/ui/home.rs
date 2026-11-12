@@ -201,7 +201,19 @@ fn made_for_you(app: &mut App, ui: &mut egui::Ui) {
     }
     // Leaximy's app cannot find Spotify's own playlists by search, so the
     // ones saved in the library are read over the streaming session.
-    for playlist in &app.library_made_for_you {
+    let saved: Vec<Playlist> = app
+        .library
+        .playlists
+        .get()
+        .map(|playlists| {
+            playlists
+                .iter()
+                .filter(|playlist| crate::app::is_spotify_made(playlist))
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+    for playlist in saved.iter().chain(&app.library_made_for_you).take(24) {
         let duplicate = playlists.iter().any(|existing| {
             existing.id == playlist.id || existing.name.eq_ignore_ascii_case(&playlist.name)
         });

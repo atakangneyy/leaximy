@@ -301,10 +301,11 @@ pub fn fullscreen(app: &mut App, ui: &mut egui::Ui) {
         });
 }
 
-/// The words of the line being sung, in capitals, and how many of them
-/// have been reached at `position_ms`. Lyrics are timed by line, so the words
+/// The words of the line being sung, in capitals, and how far through them
+/// the song is at `position_ms`, counted in words (2.5 is halfway through
+/// the third). Lyrics are timed by line, so the words
 /// are spread over the line's time: an estimate of when each is sung.
-fn sung_words(lyrics: &crate::lyrics::Lyrics, position_ms: u32) -> Option<(Vec<String>, usize)> {
+fn sung_words(lyrics: &crate::lyrics::Lyrics, position_ms: u32) -> Option<(Vec<String>, f32)> {
     let index = lyrics.active_line(position_ms)?;
     let line = lyrics.lines.get(index)?;
     let start = line.at_ms?;
@@ -321,8 +322,8 @@ fn sung_words(lyrics: &crate::lyrics::Lyrics, position_ms: u32) -> Option<(Vec<S
     // before the next one.
     let span = until_next.clamp(400, 450 * words.len() as u32 + 600);
     let progress = position_ms.saturating_sub(start) as f32 / span as f32;
-    let count = ((progress * words.len() as f32) as usize + 1).min(words.len());
-    Some((words.iter().map(|word| shout(word)).collect(), count))
+    let reached = (progress * words.len() as f32).min(words.len() as f32);
+    Some((words.iter().map(|word| shout(word)).collect(), reached))
 }
 
 /// Whether `word` (in capitals) is a small connecting word, drawn small
@@ -390,7 +391,7 @@ pub fn wallpaper(app: &mut App, ui: &mut egui::Ui) {
                 Loadable::Loaded(Some(lyrics)) => sung_words(lyrics, now.position_ms),
                 _ => None,
             };
-            if let Some((words, count)) = words {
+            if let Some((words, reached)) = words {
                 // Stacked rows centred on one point, one large word to a
                 // row with the small connecting words tucked beside it.
                 let big = theme::bold((rect.height() * 0.075).clamp(32.0, 92.0));
@@ -440,16 +441,33 @@ pub fn wallpaper(app: &mut App, ui: &mut egui::Ui) {
                     for index in row {
                         let (galley, minor) = &laid[*index];
                         let size = galley.size();
-                        if *index < count {
-                            // Small words sit on the large words' baseline.
-                            let drop = if *minor { (big.size - small.size) * 0.82 } else { 0.0 };
-                            let at = pos2(x, y + drop);
+                        // Every word waits dimmed in its place; as it is
+                        // sung it slides up into place and lights.
+                        let colour = if *minor { accent } else { Color32::WHITE };
+                        let drop = if *minor { (big.size - small.size) * 0.82 } else { 0.0 };
+                        let at = pos2(x, y + drop);
+                        let lit = ((reached - *index as f32) / 0.6).clamp(0.0, 1.0);
+                        // Ease out, so the word settles instead of stopping.
+                        let lit = 1.0 - (1.0 - lit) * (1.0 - lit);
+                        if lit < 1.0 {
                             painter.galley_with_override_text_color(
-                                at + vec2(2.0, 3.0),
+                                at,
                                 galley.clone(),
-                                Color32::from_black_alpha(170),
+                                colour.gamma_multiply(0.22 * (1.0 - lit)),
                             );
-                            painter.galley(at, galley.clone(), Color32::WHITE);
+                        }
+                        if lit > 0.0 {
+                            let slid = at + vec2(0.0, (1.0 - lit) * big.size * 0.3);
+                            painter.galley_with_override_text_color(
+                                slid + vec2(2.0, 3.0),
+                                galley.clone(),
+                                Color32::from_black_alpha((170.0 * lit) as u8),
+                            );
+                            painter.galley_with_override_text_color(
+                                slid,
+                                galley.clone(),
+                                colour.gamma_multiply(lit),
+                            );
                         }
                         x += size.x + gap;
                     }
@@ -521,7 +539,7 @@ pub fn wallpaper(app: &mut App, ui: &mut egui::Ui) {
             // The words move with the song, whoever plays it.
             if now.playing {
                 ui.ctx()
-                    .request_repaint_after(std::time::Duration::from_millis(60));
+                    .request_repaint_after(std::time::Duration::from_millis(16));
             }
         });
 }

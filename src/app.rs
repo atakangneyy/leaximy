@@ -1009,6 +1009,12 @@ impl App {
         ctx.set_theme(self.theme_preference());
         self.applied_dark = None;
         self.winamp.forget_textures();
+        // The wallpaper texture belonged to the last window's context; in
+        // a new one its id names some other picture.
+        self.desktop_backdrop = None;
+        self.desktop_backdrop_tried = false;
+        #[cfg(windows)]
+        crate::wallpaper::hide();
         self.window_hidden = false;
         self.hide_intent = false;
         self.wants_show = false;

@@ -120,9 +120,8 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
 
 /// Forgets the window once the visualizer is turned off and egui closes it.
 pub fn hide() {
-    if ATTACHED.swap(false, Ordering::Relaxed) {
-        *CHECKED.lock().unwrap_or_else(|error| error.into_inner()) = None;
-    }
+    ATTACHED.store(false, Ordering::Relaxed);
+    *CHECKED.lock().unwrap_or_else(|error| error.into_inner()) = None;
 }
 
 /// What `EnumWindows` looks for: the `WorkerW` behind the icons.

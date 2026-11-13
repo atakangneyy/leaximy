@@ -431,7 +431,12 @@ pub fn wallpaper(app: &mut App, ui: &mut egui::Ui) {
                 }
                 let row_height = big.size * 1.08;
                 let middle = left + wrap.min(rect.width() * 0.36) / 2.0;
-                let top = rect.center().y - row_height * rows.len() as f32 / 2.0;
+                // Centred, but never down into the next-up list.
+                let block = row_height * rows.len() as f32;
+                let floor = rect.bottom() - 96.0 - 58.0 * 4.0 - 60.0;
+                let top = (rect.center().y - block / 2.0)
+                    .min(floor - block)
+                    .max(rect.top() + 24.0);
                 for (line, row) in rows.iter().enumerate() {
                     let total: f32 = row.iter().map(|index| laid[*index].0.size().x).sum::<f32>()
                         + gap * row.len().saturating_sub(1) as f32;

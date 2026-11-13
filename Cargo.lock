@@ -5820,7 +5820,7 @@ dependencies = [
 
 [[package]]
 name = "leaximy"
-version = "0.11.11"
+version = "0.11.12"
 dependencies = [
  "aes 0.8.4",
  "anyhow",

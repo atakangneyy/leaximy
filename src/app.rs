@@ -2708,9 +2708,18 @@ impl App {
             self.desktop_backdrop_tried = true;
             #[cfg(windows)]
             {
-                self.desktop_backdrop = crate::wallpaper::desktop_image().map(|image| {
-                    ctx.load_texture("desktop-backdrop", image, egui::TextureOptions::LINEAR)
-                });
+                match crate::wallpaper::desktop_image() {
+                    Ok(image) => {
+                        self.desktop_backdrop = Some(ctx.load_texture(
+                            "desktop-backdrop",
+                            image,
+                            egui::TextureOptions::LINEAR,
+                        ));
+                    }
+                    Err(reason) => {
+                        self.toast_error(format!("Wallpaper not read: {reason}"));
+                    }
+                }
             }
         }
         self.desktop_backdrop.clone()

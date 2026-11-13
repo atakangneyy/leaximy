@@ -38,9 +38,9 @@ fn wide(text: &str) -> Vec<u16> {
 }
 
 /// The picture Windows shows as the desktop wallpaper, so the visualizer can
-/// draw over it instead of replacing it. `None` when there is none to read
-/// (a plain colour, or a file the decoder does not know).
-pub fn desktop_image() -> Option<egui::ColorImage> {
+/// draw over it instead of replacing it. On failure, what was tried and why
+/// each try failed.
+pub fn desktop_image() -> Result<egui::ColorImage, String> {
     let mut buffer = [0u16; 520];
     // SAFETY: the buffer is 520 UTF-16 units long, as the call is told.
     let read = unsafe {
@@ -51,35 +51,48 @@ pub fn desktop_image() -> Option<egui::ColorImage> {
             0,
         )
     };
-    let mut candidates = Vec::new();
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
     if read != 0 {
         let length = buffer.iter().position(|unit| *unit == 0).unwrap_or(0);
         if length > 0 {
-            candidates.push(std::path::PathBuf::from(String::from_utf16_lossy(
-                &buffer[..length],
-            )));
+            candidates.push(String::from_utf16_lossy(&buffer[..length]).into());
         }
     }
-    // Where Windows keeps its own copy of the current wallpaper.
+    // Windows' own copies of the current wallpaper.
     if let Some(roaming) = std::env::var_os("APPDATA") {
-        candidates.push(
-            std::path::PathBuf::from(roaming).join("Microsoft/Windows/Themes/TranscodedWallpaper"),
-        );
+        let themes = std::path::PathBuf::from(roaming).join("Microsoft/Windows/Themes");
+        candidates.push(themes.join("TranscodedWallpaper"));
+        let mut cached: Vec<(std::time::SystemTime, std::path::PathBuf)> =
+            std::fs::read_dir(themes.join("CachedFiles"))
+                .into_iter()
+                .flatten()
+                .flatten()
+                .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
+                .collect();
+        cached.sort();
+        candidates.extend(cached.into_iter().rev().take(2).map(|(_, path)| path));
     }
-    candidates.into_iter().find_map(|path| {
-        let decoded = image::ImageReader::open(path)
-            .ok()?
-            .with_guessed_format()
-            .ok()?
-            .decode()
-            .ok()?;
-        let pixels = decoded.thumbnail(2560, 2560).to_rgba8();
-        let size = [pixels.width() as usize, pixels.height() as usize];
-        Some(egui::ColorImage::from_rgba_unmultiplied(
-            size,
-            pixels.as_raw(),
-        ))
-    })
+    let mut failures = Vec::new();
+    for path in candidates {
+        let decoded = std::fs::read(&path)
+            .map_err(|error| error.to_string())
+            .and_then(|bytes| image::load_from_memory(&bytes).map_err(|error| error.to_string()));
+        match decoded {
+            Ok(decoded) => {
+                let pixels = decoded.thumbnail(1920, 1920).to_rgba8();
+                let size = [pixels.width() as usize, pixels.height() as usize];
+                return Ok(egui::ColorImage::from_rgba_unmultiplied(
+                    size,
+                    pixels.as_raw(),
+                ));
+            }
+            Err(error) => failures.push(format!("{}: {error}", path.display())),
+        }
+    }
+    if failures.is_empty() {
+        failures.push("Windows names no wallpaper file".to_owned());
+    }
+    Err(failures.join(" | "))
 }
 
 /// Draws the visualizer in its own window and keeps it behind the icons.

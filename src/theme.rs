@@ -275,7 +275,11 @@ pub fn install(ctx: &egui::Context) {
 pub fn apply(ctx: &egui::Context, palette: &Palette) {
     let mut style = (*ctx.global_style()).clone();
     apply_to_style(&mut style, palette);
-    ctx.set_global_style(style);
+    // Both themes' styles: a second window (the desktop visualizer) can
+    // resolve the other system theme, and a style with other text options
+    // makes egui rebuild its fonts on every pass, garbling the text.
+    ctx.set_style_of(egui::Theme::Dark, style.clone());
+    ctx.set_style_of(egui::Theme::Light, style);
 }
 
 /// Applies a palette to this view and children without changing global style.

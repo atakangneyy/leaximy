@@ -2695,7 +2695,10 @@ impl App {
         {
             self.refresh_queue(true);
         }
-        if self.show_lyrics_panel || self.settings.desktop_visualizer {
+        if self.show_lyrics_panel
+            || self.settings.desktop_visualizer
+            || self.settings.milkdrop_open
+        {
             self.request_lyrics();
         }
     }
@@ -2948,6 +2951,15 @@ impl App {
         let fps = self.settings.milkdrop_fps;
         let seconds = self.settings.milkdrop_seconds;
         let scale = self.settings.milkdrop_scale.max(1);
+        // The line being sung, for the window to show over the picture.
+        let lyric = match (&self.lyrics, self.now_playing()) {
+            (Loadable::Loaded(Some(lyrics)), Some(now)) => lyrics
+                .active_line(now.position_ms)
+                .and_then(|index| lyrics.lines.get(index))
+                .map(|line| line.text.trim().to_owned())
+                .unwrap_or_default(),
+            _ => String::new(),
+        };
         // Track metadata shown when the song changes.
         let song = self.now_playing().filter(|now| !now.resuming).map(|now| {
             // Title, artist, and album.
@@ -2969,6 +2981,7 @@ impl App {
                 }
                 host.update(fps, seconds, scale);
                 host.song(song);
+                host.lyric(lyric);
             } else if host.is_running() {
                 host.close();
             }

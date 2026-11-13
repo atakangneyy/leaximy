@@ -39,6 +39,8 @@ struct Control {
     scale: Option<u32>,
     /// The playing song, as lines to overlay when it changes.
     song: Option<Vec<String>>,
+    /// The line of the lyrics being sung; empty when there is none.
+    lyric: Option<String>,
     close: Option<bool>,
 }
 
@@ -175,6 +177,8 @@ struct Live {
     /// none of them can cover another: the frame rate, the song, the
     /// preset's name. None of these fade.
     corners: [Option<Overlay>; 3],
+    /// The line being sung, low in the middle.
+    lyric: Option<Overlay>,
     context: PossiblyCurrentContext,
     surface: Surface<WindowSurface>,
     window: Window,
@@ -361,6 +365,9 @@ impl Child {
         for corner in live.corners.iter_mut().flatten() {
             corner.draw(&live.gl, (size.width, size.height));
         }
+        if let Some(lyric) = &mut live.lyric {
+            lyric.draw(&live.gl, (size.width, size.height));
+        }
         if self.drawn.len() >= 60 {
             self.drawn.remove(0);
         }
@@ -430,6 +437,9 @@ impl ApplicationHandler<Control> for Child {
             if self.song_shown == SongShown::OnChange {
                 self.show_song();
             }
+        }
+        if let Some(line) = control.lyric {
+            self.show_lyric(&line);
         }
         if let Some(fps) = control.fps {
             self.fps = fps;
@@ -652,6 +662,55 @@ impl Child {
             window_size(&live.window),
         );
         self.showing_keys = true;
+        live.window.request_redraw();
+    }
+
+    /// The line being sung, in bold low in the middle, split in two when it
+    /// is long; an empty line takes it away.
+    fn show_lyric(&mut self, line: &str) {
+        let Some(live) = &mut self.live else {
+            return;
+        };
+        let gl = Arc::clone(&live.gl);
+        let window = window_size(&live.window);
+        let Some(overlay) = &mut live.lyric else {
+            return;
+        };
+        let words: Vec<&str> = line.split_whitespace().collect();
+        if words.is_empty() {
+            overlay.hide();
+            live.window.request_redraw();
+            return;
+        }
+        let whole = words.join(" ");
+        let lines = if whole.chars().count() > 34 && words.len() > 1 {
+            // Break nearest the middle.
+            let half = whole.chars().count() / 2;
+            let mut at = 1;
+            let mut length = 0;
+            for (index, word) in words.iter().enumerate() {
+                length += word.chars().count() + 1;
+                if length > half {
+                    at = (index + 1).min(words.len() - 1).max(1);
+                    break;
+                }
+            }
+            vec![words[..at].join(" "), words[at..].join(" ")]
+        } else {
+            vec![whole]
+        };
+        let rows: Vec<Row> = lines
+            .into_iter()
+            .map(|text| Row::Line(Span::new(text, 24.0).weight(700.0)))
+            .collect();
+        overlay.show(
+            &gl,
+            &rows,
+            Place::Bottom,
+            Backing::Shadow,
+            Duration::from_secs(60 * 60),
+            window,
+        );
         live.window.request_redraw();
     }
 
@@ -975,12 +1034,14 @@ fn build(event_loop: &ActiveEventLoop, args: &Args, seconds: u32) -> Result<Live
     // shaders will not take.
     let overlay = Overlay::new(&gl);
     let corners = [Overlay::new(&gl), Overlay::new(&gl), Overlay::new(&gl)];
+    let lyric = Overlay::new(&gl);
 
     let mut live = Live {
         engine,
         gl,
         overlay,
         corners,
+        lyric,
         context,
         surface,
         window,

@@ -55,13 +55,15 @@ pub enum Place {
     TopRight,
     BottomLeft,
     BottomRight,
+    /// Centred, low in the picture: the line being sung.
+    Bottom,
 }
 
 impl Place {
     /// Which edge the lines line up on: the one the block sits against.
     fn align(self) -> Align {
         match self {
-            Place::Center => Align::Center,
+            Place::Center | Place::Bottom => Align::Center,
             Place::TopLeft | Place::BottomLeft => Align::Left,
             Place::TopRight | Place::BottomRight => Align::Right,
         }
@@ -547,6 +549,7 @@ impl Overlay {
             Place::TopRight => (right, margin),
             Place::BottomLeft => (margin, bottom),
             Place::BottomRight => (right, bottom),
+            Place::Bottom => ((win_w - w) / 2.0, (win_h * 0.8 - h / 2.0).min(bottom)),
         };
         // Window pixels to clip space; row zero of the bitmap is its top.
         let x0 = left / win_w * 2.0 - 1.0;

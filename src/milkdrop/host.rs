@@ -60,6 +60,8 @@ struct Running {
     scale: u32,
     /// The song last told to the window, which overlays a change.
     song: Option<Vec<String>>,
+    /// The lyric line last sent.
+    lyric: Option<String>,
 }
 
 pub struct Host {
@@ -166,6 +168,7 @@ impl Host {
             seconds,
             scale,
             song: None,
+            lyric: None,
         });
     }
 
@@ -203,6 +206,24 @@ impl Host {
             return;
         };
         running.song = Some(lines);
+        if running.stdin.write_all((value + "\n").as_bytes()).is_err() {
+            self.tap.set_shm(None);
+        }
+    }
+
+    /// Tells the window the line of the lyrics being sung, when it changes;
+    /// an empty line clears it.
+    pub fn lyric(&mut self, line: String) {
+        let Some(running) = &mut self.running else {
+            return;
+        };
+        if running.lyric.as_ref() == Some(&line) {
+            return;
+        }
+        let Ok(value) = serde_json::to_string(&serde_json::json!({ "lyric": line })) else {
+            return;
+        };
+        running.lyric = Some(line);
         if running.stdin.write_all((value + "\n").as_bytes()).is_err() {
             self.tap.set_shm(None);
         }

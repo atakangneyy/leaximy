@@ -393,20 +393,17 @@ pub fn wallpaper(app: &mut App, ui: &mut egui::Ui) {
             if let Some((words, count)) = words {
                 // Stacked rows centred on one point, one large word to a
                 // row with the small connecting words tucked beside it.
-                // A line of many rows is set smaller, so it stays centred on
-                // the screen's middle without reaching the next-up list.
-                let floor = rect.bottom() - 96.0 - 58.0 * 4.0 - 60.0;
+                // A line of many rows is set a little smaller, never below
+                // 0.7 of full size, so it stays near the screen's middle
+                // and clear of the next-up list.
+                let floor = rect.bottom() - 96.0 - 58.0 * 3.0 - 30.0;
                 let expected = words
                     .iter()
                     .filter(|word| !minor_word(word))
                     .count()
                     .max(1) as f32;
-                let fitting = 2.0 * (floor - rect.center().y) / (expected * 1.08);
                 let big = theme::bold(
-                    (rect.height() * 0.075)
-                        .clamp(32.0, 92.0)
-                        .min(fitting)
-                        .max(22.0),
+                    (rect.height() * 0.075).clamp(32.0, 92.0) * (3.6 / expected).clamp(0.7, 1.0),
                 );
                 let small = theme::semibold(big.size * 0.46);
                 let accent = theme::Palette::dark().accent;
@@ -481,7 +478,7 @@ pub fn wallpaper(app: &mut App, ui: &mut egui::Ui) {
                     queue
                         .queue
                         .iter()
-                        .take(4)
+                        .take(3)
                         .map(|item| {
                             (
                                 item.name().to_owned(),

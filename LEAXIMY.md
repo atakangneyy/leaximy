@@ -129,3 +129,12 @@ sıradaki dört şarkı durur. Sözler satır satır zamanlandığı için kelim
 anı satır süresine yayılarak tahmin edilir. Ana ekranı kaplar; Leaximy açık
 (ya da simge durumunda) olduğu sürece görünür. Pencereyi `src/wallpaper.rs`
 yerleştirir, içeriğini `src/ui/lyrics.rs` içindeki `wallpaper` çizer.
+
+## Logo
+
+Lacivert yuvarlak kare üzerinde beyaz L, köşesinde kehribar X, altında
+kehribar el yazısı IFY. Uygulama içinde `src/util.rs` (`mark_rgba`) çizer;
+pencere, görev çubuğu, tepsi, uygulama içi logo ve tarayıcı giriş sayfası
+aynı çizimi kullanır. `packaging/` altındaki `.ico`, macOS PNG ve SVG
+dosyaları aynı çizimden üretildi. IFY, Permanent Marker yazı tipinin (Font
+Diner, Apache Lisansı 2.0) harf çizgilerinden alındı.

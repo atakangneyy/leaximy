@@ -1,7 +1,7 @@
 [package]
 name = "leaximy"
 default-run = "leaximy"
-version = "0.11.15"
+version = "0.11.16"
 edition = "2024"
 rust-version = "1.98"
 license = "MIT"

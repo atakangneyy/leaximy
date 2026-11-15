@@ -196,13 +196,13 @@ pub fn open_spotify_url(uri: &str) -> Option<String> {
     Some(format!("https://open.spotify.com/{kind}/{id}"))
 }
 
-/// The menu-bar shape for macOS: the circle with the play triangle punched
+/// The menu-bar shape for macOS: the square with the letters punched
 /// out. macOS template images use only the alpha channel and paint the
 /// shape themselves, black in a light menu bar and white in a dark one.
 pub fn tray_template_rgba(size: usize) -> Vec<u8> {
     let mut rgba = mark_rgba(size, false);
     for pixel in rgba.as_chunks_mut::<4>().0 {
-        // The triangle is the dark colour; make it a hole instead.
+        // The letters are the dark colour; make them holes instead.
         if pixel[1] < 128 {
             pixel[3] = 0;
         }
@@ -216,8 +216,7 @@ pub fn tray_template_rgba(size: usize) -> Vec<u8> {
 /// The mark rasterised to pixels: the window icon, the trays and the logo
 /// drawn in the app (`theme::logo`) all use this one picture.
 ///
-/// It is the polished disc of `packaging/icons` at every size: a darker rim
-/// around a lit face.
+/// It is the polished mark of `packaging/icons` at every size.
 pub fn app_icon_rgba(size: usize) -> Vec<u8> {
     mark_rgba(size, true)
 }
@@ -232,77 +231,90 @@ fn mix(a: [f32; 3], b: [f32; 3], t: f32) -> [f32; 3] {
     ]
 }
 
-/// How far `p` is from the triangle `a`, `b`, `c`: zero inside it.
-fn triangle_distance(p: (f32, f32), a: (f32, f32), b: (f32, f32), c: (f32, f32)) -> f32 {
-    let edge = |a: (f32, f32), b: (f32, f32)| {
-        let (ex, ey) = (b.0 - a.0, b.1 - a.1);
-        let (px, py) = (p.0 - a.0, p.1 - a.1);
-        let along = ((px * ex + py * ey) / (ex * ex + ey * ey)).clamp(0.0, 1.0);
-        let (dx, dy) = (px - ex * along, py - ey * along);
-        ((dx * dx + dy * dy).sqrt(), ex * py - ey * px)
-    };
-    let (d1, s1) = edge(a, b);
-    let (d2, s2) = edge(b, c);
-    let (d3, s3) = edge(c, a);
-    let inside = (s1 >= 0.0 && s2 >= 0.0 && s3 >= 0.0) || (s1 <= 0.0 && s2 <= 0.0 && s3 <= 0.0);
-    if inside { 0.0 } else { d1.min(d2).min(d3) }
+/// How far `p` is from the segment `a`–`b`.
+fn segment_distance(p: (f32, f32), a: (f32, f32), b: (f32, f32)) -> f32 {
+    let (ex, ey) = (b.0 - a.0, b.1 - a.1);
+    let (px, py) = (p.0 - a.0, p.1 - a.1);
+    let along = ((px * ex + py * ey) / (ex * ex + ey * ey)).clamp(0.0, 1.0);
+    ((px - ex * along).powi(2) + (py - ey * along).powi(2)).sqrt()
 }
 
-/// The mark on a 128-unit square, as `packaging/icons/spotifast.svg` draws
-/// it: a disc of radius 62 and a play triangle with corners rounded by 5,
-/// set a little left of its box so it looks centred. `polished` adds the
-/// darker rim, the lit face and the bright edge between them.
-///
-/// Leaximy: the polished mark is a navy disc with a white triangle and a
-/// thin amber edge; the plain mark stays light with a dark triangle, which
-/// `tray_template_rgba` relies on to punch the triangle out.
+/// How far `p` is outside the mark's rounded square (negative inside): a
+/// 480-unit square centred in the 512-unit field, corners rounded by 116.
+fn square_distance(p: (f32, f32)) -> f32 {
+    let qx = (p.0 - 256.0).abs() - (240.0 - 116.0);
+    let qy = (p.1 - 256.0).abs() - (240.0 - 116.0);
+    qx.max(0.0).hypot(qy.max(0.0)) + qx.max(qy).min(0.0) - 116.0
+}
+
+/// The strokes of the mark on a 512-unit square: each glyph's segments, its
+/// half width, and whether it is the accent. A white L with an amber X at
+/// its corner, and IFY in smaller strokes beneath.
+const GLYPHS: [(&[((f32, f32), (f32, f32))], f32, bool); 3] = [
+    (&[((150.0, 80.0), (150.0, 302.0)), ((150.0, 302.0), (290.0, 302.0))], 26.0, false),
+    (&[((262.0, 152.0), (346.0, 236.0)), ((346.0, 152.0), (262.0, 236.0))], 20.0, true),
+    (
+        &[
+            // I
+            ((171.0, 372.0), (171.0, 440.0)),
+            // F
+            ((207.0, 372.0), (207.0, 440.0)),
+            ((207.0, 372.0), (253.0, 372.0)),
+            ((207.0, 406.0), (243.0, 406.0)),
+            // Y
+            ((289.0, 372.0), (315.0, 406.0)),
+            ((341.0, 372.0), (315.0, 406.0)),
+            ((315.0, 406.0), (315.0, 440.0)),
+        ],
+        11.0,
+        false,
+    ),
+];
+
+/// The Leaximy mark at `size` pixels: a navy rounded square, lighter at the
+/// top, with the white L, the amber X and IFY. `polished` false gives the
+/// plain mark, a light square with every stroke dark, which
+/// `tray_template_rgba` relies on to punch the strokes out.
 fn mark_rgba(size: usize, polished: bool) -> Vec<u8> {
     const PLAIN: [f32; 3] = [246.0, 248.0, 252.0];
-    const NAVY: [f32; 3] = [27.0, 55.0, 134.0];
     const INK: [f32; 3] = [10.0, 20.0, 46.0];
     const WHITE: [f32; 3] = [255.0, 255.0, 255.0];
-    let glyph_colour = if polished { WHITE } else { INK };
+    const AMBER: [f32; 3] = [245.0, 179.0, 53.0];
     let mut rgba = vec![0u8; size * size * 4];
-    // The disc keeps two pixels of margin, so its edge is never clipped.
-    let unit = (size as f32 / 2.0 - 2.0) / 62.0;
-    let origin = size as f32 / 2.0 - 64.0 * unit;
+    // The square keeps two pixels of margin, so its edge is never clipped.
+    let unit = (size as f32 / 2.0 - 2.0) / 240.0;
+    let origin = size as f32 / 2.0 - 256.0 * unit;
     for y in 0..size {
         for x in 0..size {
             // The pixel's centre in the mark's own units.
-            let u = (x as f32 + 0.5 - origin) / unit;
-            let v = (y as f32 + 0.5 - origin) / unit;
-            let distance = ((u - 64.0).powi(2) + (v - 64.0).powi(2)).sqrt();
-            let coverage = ((62.0 - distance) * unit + 0.5).clamp(0.0, 1.0);
+            let p = (
+                (x as f32 + 0.5 - origin) / unit,
+                (y as f32 + 0.5 - origin) / unit,
+            );
+            let coverage = (-square_distance(p) * unit + 0.5).clamp(0.0, 1.0);
             if coverage <= 0.0 {
                 continue;
             }
             let mut colour = if polished {
-                // An amber rim, warm at the top and deeper at the bottom.
-                let rim = mix([255.0, 200.0, 92.0], [214.0, 140.0, 22.0], (v - 2.0) / 124.0);
-                let lit = (v - 8.0) / 112.0;
-                let face = if lit < 0.55 {
-                    mix([58.0, 92.0, 182.0], NAVY, lit / 0.55)
-                } else {
-                    mix(NAVY, [12.0, 28.0, 74.0], (lit - 0.55) / 0.45)
-                };
-                let on_face = ((56.5 - distance) * unit + 0.5).clamp(0.0, 1.0);
-                let mut colour = mix(rim, face, on_face);
-                // The bright edge where the face meets the rim: light at
-                // the top, shaded at the bottom.
-                let edge = (1.0 - (distance - 57.0).abs() / 0.9).clamp(0.0, 1.0);
-                let (tone, strength) = if lit < 0.5 {
-                    ([214.0, 228.0, 255.0], 0.8 - 0.9 * lit)
-                } else {
-                    ([6.0, 14.0, 40.0], 0.35 + 1.1 * (lit - 0.5))
-                };
-                colour = mix(colour, tone, edge * strength.clamp(0.0, 1.0));
-                colour
+                mix([36.0, 70.0, 160.0], [10.0, 22.0, 58.0], (p.1 - 16.0) / 480.0)
             } else {
                 PLAIN
             };
-            let triangle = triangle_distance((u, v), (49.2, 43.5), (49.2, 84.5), (86.1, 64.0));
-            let glyph = ((5.0 - triangle) * unit + 0.5).clamp(0.0, 1.0);
-            colour = mix(colour, glyph_colour, glyph);
+            for (segments, half, accent) in GLYPHS {
+                let distance = segments
+                    .iter()
+                    .map(|(a, b)| segment_distance(p, *a, *b))
+                    .fold(f32::MAX, f32::min);
+                let ink = ((half - distance) * unit + 0.5).clamp(0.0, 1.0);
+                if ink > 0.0 {
+                    let stroke = match (polished, accent) {
+                        (false, _) => INK,
+                        (true, true) => AMBER,
+                        (true, false) => WHITE,
+                    };
+                    colour = mix(colour, stroke, ink);
+                }
+            }
             let index = (y * size + x) * 4;
             rgba[index] = colour[0].round() as u8;
             rgba[index + 1] = colour[1].round() as u8;
@@ -396,43 +408,32 @@ mod tests {
         ]
     }
 
-    /// The icon wears the polished disc at every size, and the tray
-    /// template keeps its punched-out triangle.
+    /// The icon is the same mark at every size, and the tray template
+    /// keeps its letters punched out.
     #[test]
-    fn the_icon_is_polished_at_every_size() {
+    fn the_icon_is_the_mark_at_every_size() {
         // #given the icon at a dock size and at a tray size
         let (large, small) = (app_icon_rgba(128), app_icon_rgba(32));
 
-        // #then both have an amber rim around a navy face
-        let rim = pixel(&large, 128, 64, 4);
-        let face = pixel(&large, 128, 64, 20);
-        assert!(
-            rim[0] > 200 && rim[0] > rim[2],
-            "rim {rim:?} should be amber"
-        );
+        // #then the square is navy where nothing is written
+        let face = pixel(&large, 128, 111, 28);
         assert!(face[2] > face[0], "face {face:?} should be navy");
-        let (small_face, small_rim) = (pixel(&small, 32, 16, 6), pixel(&small, 32, 16, 2));
-        assert!(small_face[2] > small_face[0] && small_rim[0] > small_rim[2]);
-        // #and a lit top fading to a deeper bottom
-        let low = pixel(&large, 128, 64, 108);
-        assert!(face[2] > low[2]);
 
-        // #and both carry the white triangle, a little right of centre
-        for (icon, size) in [(&large, 128), (&small, 32)] {
-            let centre = pixel(icon, size, size / 2 + size / 16, size / 2);
-            assert!(
-                centre[..3].iter().all(|&c| c > 215),
-                "triangle missing at {size}: {centre:?}"
-            );
-        }
+        // #and it carries the white L and the amber X
+        let l = pixel(&large, 128, 36, 49);
+        assert!(l[..3].iter().all(|&c| c > 215), "L missing: {l:?}");
+        let x = pixel(&large, 128, 76, 48);
+        assert!(x[0] > 200 && x[0] > x[2], "X {x:?} should be amber");
+        let small_l = pixel(&small, 32, 9, 12);
+        assert!(small_l[..3].iter().all(|&c| c > 215), "L missing at 32: {small_l:?}");
 
         // #and the corners stay clear
         assert_eq!(pixel(&large, 128, 1, 1)[3], 0);
 
-        // #and the menu-bar template is the disc with the triangle cut out
+        // #and the menu-bar template is the square with the letters cut out
         let template = tray_template_rgba(44);
-        assert_eq!(pixel(&template, 44, 24, 22)[3], 0);
-        assert_eq!(pixel(&template, 44, 8, 22), [0, 0, 0, 255]);
+        assert_eq!(pixel(&template, 44, 13, 17)[3], 0);
+        assert_eq!(pixel(&template, 44, 37, 10), [0, 0, 0, 255]);
     }
 
     #[test]

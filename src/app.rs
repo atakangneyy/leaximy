@@ -1013,8 +1013,12 @@ impl App {
         // a new one its id names some other picture.
         self.desktop_backdrop = None;
         self.desktop_backdrop_tried = false;
+        // The old window and the visualizer with it are gone; make sure the
+        // desktop shows the wallpaper rather than their last frame.
         #[cfg(windows)]
-        crate::wallpaper::hide();
+        if self.settings.desktop_visualizer {
+            crate::wallpaper::take_down();
+        }
         self.window_hidden = false;
         self.hide_intent = false;
         self.wants_show = false;
@@ -9294,6 +9298,10 @@ impl App {
                 self.settings.winamp_window = !self.settings.winamp_window;
                 self.settings_dirty = true;
                 self.switch_intent = true;
+                // Off the desktop while its window still exists; the next
+                // window puts it back.
+                #[cfg(windows)]
+                crate::wallpaper::take_down();
                 ctx.send_viewport_cmd(egui::ViewportCommand::Close);
             }
             Action::SetSkin(name) => {
@@ -9898,7 +9906,9 @@ impl App {
         // drawn while the main one is, minimized or not.
         #[cfg(windows)]
         {
-            if self.settings.desktop_visualizer {
+            // Not while the window is closing to switch players: the
+            // visualizer was just taken off the desktop for the new window.
+            if self.settings.desktop_visualizer && !self.switch_intent {
                 let desktop = ui.ctx().clone();
                 crate::wallpaper::show(self, &desktop);
             } else {

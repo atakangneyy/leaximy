@@ -19,7 +19,11 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     GetWindowLongPtrW, LWA_ALPHA, SM_CXSCREEN, SM_CYSCREEN, SM_XVIRTUALSCREEN, SM_YVIRTUALSCREEN,
     SMTO_NORMAL, SPI_GETDESKWALLPAPER, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW,
     SendMessageTimeoutW, SetLayeredWindowAttributes, SetParent, SetWindowLongPtrW, SetWindowPos,
-    SystemParametersInfoW, WS_CHILD, WS_EX_LAYERED, WS_POPUP,
+    SPI_SETDESKWALLPAPER, SW_HIDE, ShowWindow, SystemParametersInfoW, WS_CHILD,
+    WS_EX_LAYERED, WS_POPUP,
+};
+use windows_sys::Win32::Graphics::Gdi::{
+    RDW_ALLCHILDREN, RDW_ERASE, RDW_FRAME, RDW_INVALIDATE, RDW_UPDATENOW, RedrawWindow,
 };
 
 use crate::app::App;
@@ -119,9 +123,69 @@ pub fn show(app: &mut App, ctx: &egui::Context) {
 }
 
 /// Forgets the window once the visualizer is turned off and egui closes it.
+/// When it was behind the icons, the desktop is told to draw its wallpaper
+/// again, so no picture of the visualizer is left there.
 pub fn hide() {
+    let was_attached = ATTACHED.swap(false, Ordering::Relaxed);
+    *CHECKED.lock().unwrap_or_else(|error| error.into_inner()) = None;
+    if was_attached {
+        take_down();
+    }
+}
+
+/// Takes the visualizer off the desktop before its window is closed with
+/// the main window (switching to or from the mini player), then has the
+/// desktop draw the wallpaper again. Explorer does not repaint on its own
+/// when a child from another process disappears, which left the last frame
+/// or a black area where the wallpaper should be.
+pub fn take_down() {
     ATTACHED.store(false, Ordering::Relaxed);
     *CHECKED.lock().unwrap_or_else(|error| error.into_inner()) = None;
+    let title = wide(TITLE);
+    let progman_class = wide("Progman");
+    let worker_class = wide("WorkerW");
+    // SAFETY: every string is nul-terminated and outlives its call; the
+    // handles come from the system and are only passed back to it.
+    unsafe {
+        let progman = FindWindowW(progman_class.as_ptr(), null());
+        let mut parents = Vec::new();
+        if !progman.is_null() {
+            parents.push(progman);
+            let mut worker = FindWindowExW(progman, null_mut(), worker_class.as_ptr(), null());
+            while !worker.is_null() {
+                parents.push(worker);
+                worker = FindWindowExW(progman, worker, worker_class.as_ptr(), null());
+            }
+        }
+        let mut worker = FindWindowExW(null_mut(), null_mut(), worker_class.as_ptr(), null());
+        while !worker.is_null() {
+            parents.push(worker);
+            worker = FindWindowExW(null_mut(), worker, worker_class.as_ptr(), null());
+        }
+        for parent in &parents {
+            let ours = FindWindowExW(*parent, null_mut(), null(), title.as_ptr());
+            if !ours.is_null() {
+                ShowWindow(ours, SW_HIDE);
+            }
+        }
+        let flags = RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW;
+        for parent in &parents {
+            RedrawWindow(*parent, null(), null_mut(), flags);
+        }
+        // Setting the same wallpaper again makes Explorer paint it afresh
+        // on every version; the setting itself is not changed or saved.
+        let mut buffer = [0u16; 520];
+        if SystemParametersInfoW(
+            SPI_GETDESKWALLPAPER,
+            buffer.len() as u32,
+            buffer.as_mut_ptr().cast(),
+            0,
+        ) != 0
+            && buffer[0] != 0
+        {
+            SystemParametersInfoW(SPI_SETDESKWALLPAPER, 0, buffer.as_mut_ptr().cast(), 0);
+        }
+    }
 }
 
 /// What `EnumWindows` looks for: the `WorkerW` behind the icons.
